@@ -1,0 +1,55 @@
+﻿version: '3.9'
+services:
+  # 配置 mysql
+  mysql:
+    build:
+      #dockerfile的路径
+      context: ./mysql
+      #dockerfile的名称
+      dockerfile: Dockerfile
+    image: mysql:5.7.25
+    container_name: mysql 
+    # 设置容器自启模式
+    restart: on-failure
+    privileged: true
+    # 设置utf8字符集
+    command: "mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_bin"
+    environment:
+      - "--wait-timeout=28800"
+      # 设置容器时区与宿主机保持一致
+      - "TZ=Asia/Shanghai"
+      # 配置所有均可访问
+      - "MYSQL_ROOT_HOST=%"
+      # 配置数据库名称
+      - "MYSQL_DATABASE=test"
+      # 设置root密码
+      - "MYSQL_ROOT_PASSWORD=root"
+    volumes:
+      # 设置容器时区与宿主机保持一致
+      - /etc/localtime:/etc/localtime:ro
+       # 映射数据库保存目录到宿主机，防止数据丢失
+      - ./mysql/data:/var/lib/mysql
+    ports:
+      - 3307:3306
+  #配置 go
+  app:
+    image: test:latest
+    restart: on-failure
+    container_name: app
+    privileged: true
+    working_dir: /opt
+    ports:
+      - "8090"
+    environment:
+      - TZ=Asia/Shanghai 
+    volumes:
+      - ./app/main:/opt/main
+      - ./app/config.yml:/opt/config.yml
+      - /etc/localtime:/etc/localtime
+      - ./mysql/data:/var/lib/mysql
+      - ./test.sh:/opt/test.sh
+    #启动容器后执行的命令 /opt/wait-for-it.sh mysql:3306 -- 
+    entrypoint: "/opt/main"
+    #该服务依赖的其他服务，该配置选项可修改启动顺序
+    depends_on:
+      - mysql

@@ -6,6 +6,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"learngo/setting"
 	"learngo/utils"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 )
 
@@ -23,8 +26,11 @@ func Init() {
 
 	// 构建 MySQL 连接字符串
 	dbSource := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUser, dbPassword, dbHost, dbPort, dbName)
-	connectMysqlByTimes(dbSource)
-	judgeTimes(dbSource)
+	isDel := setting.AppConfig.MysqlInfo.IsDel
+	if isDel == 1 {
+		connectMysqlByTimes(dbSource)
+		judgeTimes(dbSource)
+	}
 }
 
 func judgeTimes(dbSource string) {
@@ -46,6 +52,45 @@ func judgeTimes(dbSource string) {
 			}
 		}
 	}
+}
+
+// BackupDatabase backs up the entire database and saves it as a SQL file
+func BackupDatabase() (string, error) {
+	fileName := fmt.Sprintf("%s-new.sql", setting.AppConfig.MysqlInfo.Database)
+	tempFileName := fmt.Sprintf(".%s.new.sql.tmp", setting.AppConfig.MysqlInfo.Database)
+	tempFilePath := filepath.Join("/var/lib/mysql/", tempFileName)
+	finalFilePath := filepath.Join("/var/lib/mysql/", fileName)
+
+	// 创建临时文件
+	tempFile, err := os.OpenFile(tempFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	defer tempFile.Close()
+
+	// 构建mysqldump命令
+	cmd := exec.Command("mysqldump",
+		"-h", setting.AppConfig.MysqlInfo.Host,
+		"-P", setting.AppConfig.MysqlInfo.Port,
+		"-u", setting.AppConfig.MysqlInfo.User,
+		"-p"+setting.AppConfig.MysqlInfo.Password,
+		setting.AppConfig.MysqlInfo.Database)
+
+	// 设置mysqldump命令的标准输出为临时文件
+	cmd.Stdout = tempFile
+	cmd.Stderr = os.Stderr
+
+	// 执行mysqldump命令
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("mysqldump failed: %w", err)
+	}
+
+	// 原子性地将临时文件重命名为最终的文件名
+	if err := os.Rename(tempFilePath, finalFilePath); err != nil {
+		return "", fmt.Errorf("failed to rename temporary file to final file: %w", err)
+	}
+
+	return finalFilePath, nil
 }
 
 func connectMysqlByTimes(dbSource string) {

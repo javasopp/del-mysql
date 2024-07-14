@@ -16,6 +16,7 @@ type Mysql struct {
 	Port     string `yaml:"port"`
 	Database string `yaml:"mysql"`
 	File     string `yaml:"file"`
+	IsDel    int    `yaml:"is_del"`
 }
 
 var AppConfig Config

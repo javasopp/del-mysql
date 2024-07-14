@@ -4,5 +4,9 @@ mysql:
   port: 3307
   user: root
   password: root
+  # 具体的数据库名
   database: test
+  # 是否开启删除监听: 0-关闭 1-开启
+  is_del: 0
+  path: /Users/sopp/Documents/compose/docker-compose-test
   file: docker-compose-test/test.sh

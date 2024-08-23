@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
 	log "github.com/sirupsen/logrus"
@@ -10,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 )
 
 var connectTimes = 0
@@ -33,6 +35,101 @@ func Init() {
 	}
 }
 
+func BackupDatabase() error {
+	fileName := fmt.Sprintf("%s-new.sql", setting.AppConfig.MysqlInfo.Database)
+	tempFileName := fmt.Sprintf(".%s.new.sql.tmp", setting.AppConfig.MysqlInfo.Database)
+	tempFilePath := filepath.Join("/var/lib/mysql/", tempFileName)
+	finalFilePath := filepath.Join("/var/lib/mysql/", fileName)
+
+	tempFile, err := os.OpenFile(tempFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("创建临时文件失败: %w", err)
+	}
+	defer tempFile.Close()
+
+	cmdArgs := []string{
+		"-h", setting.AppConfig.MysqlInfo.Host,
+		"-P", setting.AppConfig.MysqlInfo.Port,
+		"-u", setting.AppConfig.MysqlInfo.User,
+		"-p" + setting.AppConfig.MysqlInfo.Password,
+		"--single-transaction",
+		setting.AppConfig.MysqlInfo.Database,
+	}
+
+	cmd := exec.Command("mysqldump", cmdArgs...)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("获取标准输出管道失败: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("获取错误输出管道失败: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("启动mysqldump失败: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		reader := bufio.NewReader(stdout)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err.Error() != "EOF" {
+					fmt.Println("读取mysqldump标准输出时出错:", err)
+				}
+				break
+			}
+			if _, err := tempFile.WriteString(line); err != nil {
+				fmt.Println("写入临时文件失败:", err)
+				break
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		reader := bufio.NewReader(stderr)
+		var errOutput string
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err.Error() != "EOF" {
+					fmt.Println("读取mysqldump错误输出时出错:", err)
+				}
+				break
+			}
+			errOutput += line
+		}
+		if errOutput != "" {
+			fmt.Println("mysqldump错误输出:", errOutput)
+		}
+	}()
+
+	// 等待所有的 stdout 和 stderr 读取完成
+	wg.Wait()
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("执行mysqldump失败: %w", err)
+	}
+
+	if err := tempFile.Sync(); err != nil {
+		return fmt.Errorf("同步临时文件失败: %w", err)
+	}
+
+	if err := os.Rename(tempFilePath, finalFilePath); err != nil {
+		return fmt.Errorf("重命名临时文件失败: %w", err)
+	}
+
+	return nil
+}
+
 func judgeTimes(dbSource string) {
 	if continueTimes <= 0 {
 		if connectTimes >= 4 {
@@ -52,45 +149,6 @@ func judgeTimes(dbSource string) {
 			}
 		}
 	}
-}
-
-// BackupDatabase backs up the entire database and saves it as a SQL file
-func BackupDatabase() (string, error) {
-	fileName := fmt.Sprintf("%s-new.sql", setting.AppConfig.MysqlInfo.Database)
-	tempFileName := fmt.Sprintf(".%s.new.sql.tmp", setting.AppConfig.MysqlInfo.Database)
-	tempFilePath := filepath.Join("/var/lib/mysql/", tempFileName)
-	finalFilePath := filepath.Join("/var/lib/mysql/", fileName)
-
-	// 创建临时文件
-	tempFile, err := os.OpenFile(tempFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return "", fmt.Errorf("failed to create temporary file: %w", err)
-	}
-	defer tempFile.Close()
-
-	// 构建mysqldump命令
-	cmd := exec.Command("mysqldump",
-		"-h", setting.AppConfig.MysqlInfo.Host,
-		"-P", setting.AppConfig.MysqlInfo.Port,
-		"-u", setting.AppConfig.MysqlInfo.User,
-		"-p"+setting.AppConfig.MysqlInfo.Password,
-		setting.AppConfig.MysqlInfo.Database)
-
-	// 设置mysqldump命令的标准输出为临时文件
-	cmd.Stdout = tempFile
-	cmd.Stderr = os.Stderr
-
-	// 执行mysqldump命令
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("mysqldump failed: %w", err)
-	}
-
-	// 原子性地将临时文件重命名为最终的文件名
-	if err := os.Rename(tempFilePath, finalFilePath); err != nil {
-		return "", fmt.Errorf("failed to rename temporary file to final file: %w", err)
-	}
-
-	return finalFilePath, nil
 }
 
 func connectMysqlByTimes(dbSource string) {

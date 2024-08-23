@@ -23,15 +23,14 @@ func main() {
 	})
 	// 定义保存数据库的表
 	r.GET("/save", func(c *gin.Context) {
-		path, err := mysql.BackupDatabase()
+		err := mysql.BackupDatabase()
 		if err != nil {
 			panic(err)
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(200, gin.H{
-			"backup_file": path,
-			"code":        0,
+			"code": 0,
 		})
 	})
 	r.Run(":8090") // 监听并在 0.0.0.0:8080 上启动服务

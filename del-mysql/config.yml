@@ -10,3 +10,4 @@ mysql:
   is_del: 0
   path: /Users/sopp/Documents/compose/docker-compose-test
   file: docker-compose-test/test.sh
+  backFile: backup.sh

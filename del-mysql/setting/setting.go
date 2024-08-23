@@ -16,6 +16,7 @@ type Mysql struct {
 	Port     string `yaml:"port"`
 	Database string `yaml:"mysql"`
 	File     string `yaml:"file"`
+	BackFile string `yaml:"backFile"`
 	IsDel    int    `yaml:"is_del"`
 }
 

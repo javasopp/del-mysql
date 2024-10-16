@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -56,6 +57,9 @@ func BackupDatabase() error {
 		setting.AppConfig.MysqlInfo.Database,
 	}
 
+	cmdStr := fmt.Sprintf("mysqldump %s", strings.Join(cmdArgs, " "))
+	log.Info("执行的 mysqldump 命令: ", cmdStr)
+
 	cmd := exec.Command("mysqldump", cmdArgs...)
 
 	stdout, err := cmd.StdoutPipe()
@@ -82,12 +86,13 @@ func BackupDatabase() error {
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				if err.Error() != "EOF" {
-					fmt.Println("读取mysqldump标准输出时出错:", err)
+					log.Error("读取mysqldump标准输出时出错:", err)
 				}
 				break
 			}
+			log.Info("mysqldump标准输出:", line)
 			if _, err := tempFile.WriteString(line); err != nil {
-				fmt.Println("写入临时文件失败:", err)
+				log.Error("写入临时文件失败:", err)
 				break
 			}
 		}
@@ -96,19 +101,15 @@ func BackupDatabase() error {
 	go func() {
 		defer wg.Done()
 		reader := bufio.NewReader(stderr)
-		var errOutput string
 		for {
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				if err.Error() != "EOF" {
-					fmt.Println("读取mysqldump错误输出时出错:", err)
+					log.Error("读取mysqldump错误输出时出错:", err)
 				}
 				break
 			}
-			errOutput += line
-		}
-		if errOutput != "" {
-			fmt.Println("mysqldump错误输出:", errOutput)
+			log.Error("mysqldump错误输出:", line)
 		}
 	}()
 

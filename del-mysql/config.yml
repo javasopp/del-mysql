@@ -7,7 +7,8 @@ mysql:
   # 具体的数据库名
   database: test
   # 是否开启删除监听: 0-关闭 1-开启
-  is_del: 0
+  isDel: 0
+  isBox: 1
   path: /Users/sopp/Documents/compose/docker-compose-test
   file: docker-compose-test/test.sh
   backFile: backup.sh

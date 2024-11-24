@@ -17,7 +17,8 @@ type Mysql struct {
 	Database string `yaml:"mysql"`
 	File     string `yaml:"file"`
 	BackFile string `yaml:"backFile"`
-	IsDel    int    `yaml:"is_del"`
+	IsDel    int    `yaml:"isDel"`
+	IsBox    int    `yaml:"isBox"`
 }
 
 var AppConfig Config

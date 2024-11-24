@@ -136,6 +136,10 @@ func judgeTimes(dbSource string) {
 		if connectTimes >= 4 {
 			log.Info("mysql连接成功,i got you~")
 			continueTimes = 1
+			if setting.AppConfig.MysqlInfo.IsBox == 1 {
+				log.Info("开启之前的备份")
+				_ = BackupDatabase()
+			}
 		} else {
 			log.Errorf("mysql连接错误，该容器出现异常~")
 			log.Errorf("%v", err)
